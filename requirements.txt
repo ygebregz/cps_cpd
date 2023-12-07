@@ -1,1 +1,5 @@
-geopandas
+geopandas==0.14.0
+pandas==1.5.3
+python-dotenv==0.21.1
+shapely==2.0.2
+haversine==2.8.0
