@@ -1,4 +1,8 @@
-#install.packages(c("leaflet", "sf", "lwgeom))
+install.packages("packrat")
+
+packrat::init()
+
+#install.packages(c("leaflet", "sf", "lwgeom", "ggplot2","ggpubr", "dplyr"))
 library(leaflet)
 library(sf)
 library(lwgeom)
@@ -12,27 +16,27 @@ cpd_parks <- st_read("data/cpd_parks.geojson")
 cpd_parks <- st_make_valid(cpd_parks)
 
 cps_schools_sf <- st_as_sf(cps_schools, coords = c("longitude", "latitude"), crs = 4326)
-cps_schools$popup_info <- paste("School Name: ", cps_schools$school_name, 
+cps_schools$popup_info <- paste("School Name: ", cps_schools$school_name,
                                 "<br>Walking Distance to Nearest Park (miles): ", cps_schools$distance_to_nearest_park_miles,
                                 "<br>Nearest Park: ", cps_schools$nearest_park,
                                 "<br>Time to Walk to Nearest Park (minutes): ", cps_schools$duration,
-                                "<br>ELA Proficiency: ", cps_schools$ela_proficiency, 
-                                "<br>SAT Average Reading Score: ", cps_schools$SAT_average_reading_score, 
-                                "<br>SAT Average Math Score: ", cps_schools$SAT_average_math_score, 
+                                "<br>ELA Proficiency: ", cps_schools$ela_proficiency,
+                                "<br>SAT Average Reading Score: ", cps_schools$SAT_average_reading_score,
+                                "<br>SAT Average Math Score: ", cps_schools$SAT_average_math_score,
                                 "<br>ISA Proficiency: ", cps_schools$isa_proficiency)
 
 # Create a leaflet map with Chicago as the base map
 parks_and_schools <- leaflet(options = leafletOptions(title = "Schools and Parks Map")) %>%
   addProviderTiles(providers$CartoDB.Positron) %>%  # You can choose other providers as well
   # add schools
-  addCircleMarkers(data = cps_schools, lng = ~longitude, lat = ~latitude, 
-                   color = "#0000CD", fillOpacity = 0.1, radius = 2, 
+  addCircleMarkers(data = cps_schools, lng = ~longitude, lat = ~latitude,
+                   color = "#0000CD", fillOpacity = 0.1, radius = 2,
                    popup = ~popup_info) %>%
   # add parks
   addPolygons(data = cpd_parks, color = "green", fillOpacity = 0.2,
               popup = ~park) %>%
   # add legend
-  addLegend("topright", colors = c("#0000CD", "green"), 
+  addLegend("topright", colors = c("#0000CD", "green"),
             labels = c("School", "Park"), title = "Labels")
 parks_and_schools
 
@@ -54,8 +58,8 @@ for (test in tests) {
   model <- lm(data[[test]] ~ data$distance_to_nearest_park_miles)
   
   # Generate scatter plot
-  plot <- ggscatter(data, x = "distance_to_nearest_park_miles", y = test, 
-                    add = "reg.line", conf.int = TRUE, 
+  plot <- ggscatter(data, x = "distance_to_nearest_park_miles", y = test,
+                    add = "reg.line", conf.int = TRUE,
                     title = paste("Distance to Nearest Park vs", test_names[[test]]),
                     xlab = "Distance to Nearest Park (miles)", ylab = test_names[[test]],
                     repel = TRUE) +
@@ -78,18 +82,12 @@ census_data <- read.csv("data/census_data/CCA.csv")
 
 # Merge the datasets
 joined_data_df <- merge(chicago_counties_df, census_data, by.x = "area_num_1", by.y = "GEOID")
-
-# Convert the merged data frame back to a spatial data frame
 joined_data <- st_as_sf(joined_data_df)
 
 # Calculate the percentage for each racial group
 joined_data$PERCENT_BLACK <- joined_data$BLACK / joined_data$TOT_POP * 100
 joined_data$PERCENT_WHITE <- joined_data$WHITE / joined_data$TOT_POP * 100
 joined_data$PERCENT_HISP <- joined_data$HISP / joined_data$TOT_POP * 100
-# Add more calculations for other racial groups if needed
-
-
-# Add more color palettes for other racial groups if needed
 
 crs_schools <- st_crs(cps_schools_sf)
 crs_counties <- st_crs(chicago_counties)
@@ -99,10 +97,7 @@ if (crs_schools != crs_counties) {
   cps_schools_sf <- st_transform(cps_schools_sf, crs_counties)
 }
 
-# Now you can use the st_within() function
 schools_in_counties <- st_within(cps_schools_sf, chicago_counties)
-
-# Initialize a vector to store the average distances
 avg_distances <- numeric(nrow(chicago_counties))
 
 # Calculate the average distance to a park for the schools in each county
@@ -117,37 +112,56 @@ for (i in seq_len(nrow(chicago_counties))) {
 
 joined_data$avg_distance_to_park <- avg_distances
 
-# Create a color palette function for each racial group
+# color palette for each group
 colorpal_black <- colorNumeric(palette = "PuBuGn", domain = joined_data$PERCENT_BLACK)
 colorpal_white <- colorNumeric(palette = "PuBuGn", domain = joined_data$PERCENT_WHITE)
 colorpal_hisp <- colorNumeric(palette = "PuBuGn", domain = joined_data$PERCENT_HISP)
 
+
+pal <- colorNumeric(palette = "PuBuGn", domain = joined_data$PERCENT_BLACK)
+perc_black <- joined_data$PERCENT_BLACK
 map_black <- parks_and_schools %>%
-  addPolygons(data = joined_data, weight=1, color = "black",fillColor = ~colorpal_black(PERCENT_BLACK), fillOpacity = 0.5
+  addPolygons(data = joined_data, weight=1, color = "black",fillColor = ~colorpal_black(joined_data$PERCENT_BLACK), fillOpacity = 0.5
               ,popup = ~paste0("County: ", GEOG, "<br>",
-                              "Percent Black: ", PERCENT_BLACK, "%", "<br>",
-                              "Average Distance to Park: ", avg_distance_to_park, " miles")) 
+                               "Percent Black: ", PERCENT_BLACK, "%", "<br>",
+                               "Average Distance to Park: ", avg_distance_to_park, " miles")) %>%
+  addLegend(position = "bottomright",
+            pal = pal,
+            values = perc_black,
+            title = "Percentage Black",
+            opacity = 1)
 
 map_black
-ggsave("black_population_park_access.png", map_black)
 
 
+pal <- colorNumeric(palette = "PuBuGn", domain = joined_data$PERCENT_HISP)
+perc_hisp <- joined_data$PERCENT_HISP
 map_hisp <- parks_and_schools %>%
   addPolygons(data = joined_data, weight=1, color = "black",fillColor = ~colorpal_hisp(PERCENT_HISP), fillOpacity = 0.5
               ,popup = ~paste0("County: ", GEOG, "<br>",
                                "Percent Hispanic: ", PERCENT_BLACK, "%", "<br>",
-                               "Average Distance to Park: ", avg_distance_to_park, " miles"))
+                               "Average Distance to Park: ", avg_distance_to_park, " miles"))%>%
+  addLegend(position = "bottomright",
+            pal = pal,
+            values = perc_hisp,
+            title = "Percentage Hispanic",
+            opacity = 1)
 map_hisp
-ggsave("hisp_population_park_access.png", map_hisp)
 
 
+pal <- colorNumeric(palette = "PuBuGn", domain = joined_data$PERCENT_WHITE)
+perc_white <- joined_data$PERCENT_WHITE
 map_white <- parks_and_schools %>%
   addPolygons(data = joined_data, weight=1, color = "black",fillColor = ~colorpal_white(PERCENT_WHITE), fillOpacity = 0.5
               ,popup = ~paste0("County: ", GEOG, "<br>",
                                "Percent White: ", PERCENT_BLACK, "%", "<br>",
-                               "Average Distance to Park: ", avg_distance_to_park, " miles")) 
+                               "Average Distance to Park: ", avg_distance_to_park, " miles")) %>%
+  addLegend(position = "bottomright",
+            pal = pal,
+            values = perc_white,
+            title = "Percentage White",
+            opacity = 1)
 map_white
-ggsave("hisp_population_park_access.png", map_hisp)
 
 #===========================
 # What role race plays in park access
@@ -193,6 +207,3 @@ plot_hisp <-ggplot(joined_data, aes(x = PERCENT_HISP, y = avg_distance_to_park))
   annotate("text", x = Inf, y = Inf, label = paste("Correlation: ", round(cor_hisp, 2)), vjust = 2, hjust = 2)
 plot_hisp
 ggsave("results/hisp_pop_access_to_park.png", plot_hisp)
-
-
-
